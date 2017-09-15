@@ -169,6 +169,48 @@ class MotionSensor:
         resp = yield from self.client.soap_actions(self.module_id)
         self._soap_actions = resp['ModuleSOAPList']['SOAPActions']['Action']
 
+class WaterSensor:
+    """Wrapper class for a water sensor."""
+
+    def __init__(self, client, module_id=1):
+        """Initialize a new WaterSensor instance."""
+        self.client = client
+        self.module_id = module_id
+        self._soap_actions = None
+
+    @asyncio.coroutine
+    def latest_trigger(self):
+        """Get latest trigger time from sensor."""
+        if not self._soap_actions:
+            yield from self._cache_soap_actions()
+
+        detect_time = None
+        if 'GetLatestDetection' in self._soap_actions:
+            resp = yield from self.client.call(
+                'GetLatestDetection', ModuleID=self.module_id)
+            detect_time = resp['LatestDetectTime']
+        else:
+            resp = yield from self.client.call(
+                'GetWaterDetectorLogs', ModuleID=self.module_id, MaxCount=1,
+                PageOffset=1, StartTime=0, EndTime='All')
+            if 'WaterDetectorLogList' not in resp:
+                _LOGGER.error('log list: ' + str(resp))
+            log_list = resp['WaterDetectorLogList']
+            detect_time = log_list['WaterDetectorLog']['TimeStamp']
+
+        return datetime.fromtimestamp(float(detect_time))
+
+    @asyncio.coroutine
+    def system_log(self):
+        resp = yield from self.client.call(
+            'GetSystemLogs', MaxCount=100,
+            PageOffset=1, StartTime=0, EndTime='All')
+        print(resp)
+
+    @asyncio.coroutine
+    def _cache_soap_actions(self):
+        resp = yield from self.client.soap_actions(self.module_id)
+        self._soap_actions = resp['ModuleSOAPList']['SOAPActions']['Action']
 
 class NanoSOAPClient:
 
